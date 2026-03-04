@@ -12,6 +12,31 @@ local FATIGUE_DEBUFFS = {
     [264689] = true,  -- Hunter Pet Fatigued (alt)
 }
 
+local FATIGUE_DEBUFF_IDS = {
+    57723,
+    390435,
+    57724,
+    80354,
+    95809,
+    160455,
+    264689,
+}
+
+local function NormalizeFatigueSpellId(spellId)
+    if spellId == nil then
+        return nil
+    end
+
+    for i = 1, #FATIGUE_DEBUFF_IDS do
+        local knownSpellId = FATIGUE_DEBUFF_IDS[i]
+        if spellId == knownSpellId then
+            return knownSpellId
+        end
+    end
+
+    return nil
+end
+
 -- Available sound files in Media/Sounds folder
 ChipiLust_AvailableSounds = {
     {name = "Chipi Chipi", file = "chipichipi_BL.mp3"},
@@ -288,15 +313,13 @@ local function CheckForFatigueDebuff(unit)
         if not auraData then break end
         
         local spellId = auraData.spellId
-        if type(spellId) ~= "number" then
-            spellId = tonumber(spellId)
-        end
+        local fatigueSpellId = NormalizeFatigueSpellId(spellId)
         
-        if spellId and FATIGUE_DEBUFFS[spellId] then
-            activeFatigueDebuffs[spellId] = true
+        if fatigueSpellId and FATIGUE_DEBUFFS[fatigueSpellId] then
+            activeFatigueDebuffs[fatigueSpellId] = true
 
             -- Check if this is one of our target debuffs and we haven't already triggered
-            if not triggered_debuffs[spellId] then
+            if not triggered_debuffs[fatigueSpellId] then
                 -- Check debuff duration to prevent triggering on login with existing debuff
                 -- Only trigger if debuff has 598-600 seconds remaining (freshly applied)
                 local expirationTime = tonumber(auraData.expirationTime) or 0
@@ -304,7 +327,7 @@ local function CheckForFatigueDebuff(unit)
 
                 -- Only trigger if debuff is very fresh (between 598 and 600 seconds remaining)
                 if remainingTime >= 598 and remainingTime <= 600 then
-                    triggered_debuffs[spellId] = true
+                    triggered_debuffs[fatigueSpellId] = true
                     TriggerFatigueReaction()
                 end
             end
