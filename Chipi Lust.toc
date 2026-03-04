@@ -7,6 +7,7 @@
 ## IconTexture: Interface\AddOns\Chipi Lust\Media\Images\chipi.tga
 ## License: MIT
 ## Notes: Plays sounds and shows images when you gain fatigue debuffs
+## X-Curse-Project-ID: 1477483
 
 Core.lua
 Options.lua

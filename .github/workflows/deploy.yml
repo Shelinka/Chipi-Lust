@@ -1,0 +1,20 @@
+name: Auto-Deploy to CurseForge
+
+on:
+  push:
+    branches:
+      - main  # This triggers the upload every time you push to 'main'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Package and Upload
+        uses: BigWigsMods/packager@v2
+        env:
+          CF_API_KEY: ${{ 39647607-f608-4245-8fdd-2c8fe6ad9afe }}

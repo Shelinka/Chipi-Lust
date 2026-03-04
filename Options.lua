@@ -96,6 +96,8 @@ StaticPopupDialogs["CHIPILUST_NEW_PROFILE"] = {
                     enabled = true,
                     playSounds = true,
                     showImages = true,
+                    showTimer = true,
+                    timerSize = 24,
                     selectedSound = "chipichipi_BL.mp3",
                     selectedImage = "chipi.tga",
                     imageSize = 256,
@@ -200,10 +202,25 @@ imagesCheckbox:SetScript("OnClick", function(self)
 end)
 
 -- ===========================
+-- Show Timer Checkbox
+-- ===========================
+local timerCheckbox = CreateFrame("CheckButton", "ChipiLustTimerCheck", scrollChild, "InterfaceOptionsCheckButtonTemplate")
+timerCheckbox:SetPoint("TOPLEFT", imagesCheckbox, "BOTTOMLEFT", 0, -8)
+timerCheckbox.Text:SetText("Show 40s Timer")
+timerCheckbox.tooltipText = "Show a 40 second countdown under the animation"
+
+timerCheckbox:SetScript("OnClick", function(self)
+    local profile = GetCurrentProfile()
+    if profile then
+        profile.showTimer = self:GetChecked()
+    end
+end)
+
+-- ===========================
 -- Image Selection Dropdown
 -- ===========================
 local imageLabel = scrollChild:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-imageLabel:SetPoint("TOPLEFT", imagesCheckbox, "BOTTOMLEFT", 20, -12)
+imageLabel:SetPoint("TOPLEFT", timerCheckbox, "BOTTOMLEFT", 20, -12)
 imageLabel:SetText("Select Image:")
 
 local imageDropdown = CreateFrame("Frame", "ChipiLustImageDropdown", scrollChild, "UIDropDownMenuTemplate")
@@ -251,6 +268,42 @@ local testButtonLabel = scrollChild:CreateFontString(nil, "ARTWORK", "GameFontHi
 testButtonLabel:SetPoint("LEFT", testButton, "RIGHT", 8, 0)
 testButtonLabel:SetText("Preview current settings")
 
+local function ClampValue(value, minValue, maxValue)
+    if value < minValue then return minValue end
+    if value > maxValue then return maxValue end
+    return value
+end
+
+local function CreateSliderInput(parent, anchorFrame, minValue, maxValue, onApply)
+    local input = CreateFrame("EditBox", nil, parent, "InputBoxTemplate")
+    input:SetSize(60, 20)
+    input:SetPoint("LEFT", anchorFrame, "RIGHT", 14, 0)
+    input:SetAutoFocus(false)
+    if minValue >= 0 then
+        input:SetNumeric(true)
+    else
+        input:SetNumeric(false)
+    end
+    input:SetMaxLetters(6)
+
+    input:SetScript("OnEnterPressed", function(self)
+        local raw = tonumber(self:GetText())
+        if raw then
+            onApply(ClampValue(math.floor(raw), minValue, maxValue))
+        end
+        self:ClearFocus()
+    end)
+
+    input:SetScript("OnEditFocusLost", function(self)
+        local raw = tonumber(self:GetText())
+        if raw then
+            onApply(ClampValue(math.floor(raw), minValue, maxValue))
+        end
+    end)
+
+    return input
+end
+
 -- ===========================
 -- Image Size Slider
 -- ===========================
@@ -269,13 +322,71 @@ _G[sizeSlider:GetName() .. "Low"]:SetText("64")
 _G[sizeSlider:GetName() .. "High"]:SetText("512")
 _G[sizeSlider:GetName() .. "Text"]:SetText("Image Size")
 
+local sizeInput = CreateSliderInput(scrollChild, sizeSlider, 64, 512, function(value)
+    local profile = GetCurrentProfile()
+    if profile then
+        profile.imageSize = value
+        sizeSlider:SetValue(value)
+        _G[sizeSlider:GetName() .. "Text"]:SetText("Image Size: " .. value .. "px")
+        if sizeInput then sizeInput:SetText(tostring(value)) end
+        if ChipiLust_UpdateImageSettings then
+            ChipiLust_UpdateImageSettings()
+        end
+    end
+end)
+
 sizeSlider:SetScript("OnValueChanged", function(self, value)
     value = math.floor(value)
     local profile = GetCurrentProfile()
     if profile then
         profile.imageSize = value
         _G[self:GetName() .. "Text"]:SetText("Image Size: " .. value .. "px")
+        if sizeInput then sizeInput:SetText(tostring(value)) end
         -- Update image frame in real-time
+        if ChipiLust_UpdateImageSettings then
+            ChipiLust_UpdateImageSettings()
+        end
+    end
+end)
+
+-- ===========================
+-- Timer Size Slider
+-- ===========================
+local timerSizeLabel = scrollChild:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+timerSizeLabel:SetPoint("TOPLEFT", sizeSlider, "BOTTOMLEFT", -8, -20)
+timerSizeLabel:SetText("Timer Size:")
+
+local timerSizeSlider = CreateFrame("Slider", "ChipiLustTimerSizeSlider", scrollChild, "OptionsSliderTemplate")
+timerSizeSlider:SetPoint("TOPLEFT", timerSizeLabel, "BOTTOMLEFT", 8, -8)
+timerSizeSlider:SetMinMaxValues(12, 64)
+timerSizeSlider:SetValueStep(1)
+timerSizeSlider:SetObeyStepOnDrag(true)
+timerSizeSlider:SetWidth(200)
+
+_G[timerSizeSlider:GetName() .. "Low"]:SetText("12")
+_G[timerSizeSlider:GetName() .. "High"]:SetText("64")
+_G[timerSizeSlider:GetName() .. "Text"]:SetText("Timer Size")
+
+local timerSizeInput = CreateSliderInput(scrollChild, timerSizeSlider, 12, 64, function(value)
+    local profile = GetCurrentProfile()
+    if profile then
+        profile.timerSize = value
+        timerSizeSlider:SetValue(value)
+        _G[timerSizeSlider:GetName() .. "Text"]:SetText("Timer Size: " .. value)
+        if timerSizeInput then timerSizeInput:SetText(tostring(value)) end
+        if ChipiLust_UpdateImageSettings then
+            ChipiLust_UpdateImageSettings()
+        end
+    end
+end)
+
+timerSizeSlider:SetScript("OnValueChanged", function(self, value)
+    value = math.floor(value)
+    local profile = GetCurrentProfile()
+    if profile then
+        profile.timerSize = value
+        _G[self:GetName() .. "Text"]:SetText("Timer Size: " .. value)
+        if timerSizeInput then timerSizeInput:SetText(tostring(value)) end
         if ChipiLust_UpdateImageSettings then
             ChipiLust_UpdateImageSettings()
         end
@@ -286,7 +397,7 @@ end)
 -- Image Position
 -- ===========================
 local positionLabel = scrollChild:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-positionLabel:SetPoint("TOPLEFT", sizeSlider, "BOTTOMLEFT", -8, -20)
+positionLabel:SetPoint("TOPLEFT", timerSizeSlider, "BOTTOMLEFT", -8, -20)
 positionLabel:SetText("Image Position:")
 
 -- Position preset dropdown
@@ -346,12 +457,26 @@ _G[xOffsetSlider:GetName() .. "Low"]:SetText("-500")
 _G[xOffsetSlider:GetName() .. "High"]:SetText("500")
 _G[xOffsetSlider:GetName() .. "Text"]:SetText("X Offset")
 
+local xOffsetInput = CreateSliderInput(scrollChild, xOffsetSlider, -500, 500, function(value)
+    local profile = GetCurrentProfile()
+    if profile then
+        profile.imageX = value
+        xOffsetSlider:SetValue(value)
+        _G[xOffsetSlider:GetName() .. "Text"]:SetText("X Offset: " .. value)
+        if xOffsetInput then xOffsetInput:SetText(tostring(value)) end
+        if ChipiLust_UpdateImageSettings then
+            ChipiLust_UpdateImageSettings()
+        end
+    end
+end)
+
 xOffsetSlider:SetScript("OnValueChanged", function(self, value)
     value = math.floor(value)
     local profile = GetCurrentProfile()
     if profile then
         profile.imageX = value
         _G[self:GetName() .. "Text"]:SetText("X Offset: " .. value)
+        if xOffsetInput then xOffsetInput:SetText(tostring(value)) end
         -- Update image frame in real-time
         if ChipiLust_UpdateImageSettings then
             ChipiLust_UpdateImageSettings()
@@ -375,12 +500,26 @@ _G[yOffsetSlider:GetName() .. "Low"]:SetText("-500")
 _G[yOffsetSlider:GetName() .. "High"]:SetText("500")
 _G[yOffsetSlider:GetName() .. "Text"]:SetText("Y Offset")
 
+local yOffsetInput = CreateSliderInput(scrollChild, yOffsetSlider, -500, 500, function(value)
+    local profile = GetCurrentProfile()
+    if profile then
+        profile.imageY = value
+        yOffsetSlider:SetValue(value)
+        _G[yOffsetSlider:GetName() .. "Text"]:SetText("Y Offset: " .. value)
+        if yOffsetInput then yOffsetInput:SetText(tostring(value)) end
+        if ChipiLust_UpdateImageSettings then
+            ChipiLust_UpdateImageSettings()
+        end
+    end
+end)
+
 yOffsetSlider:SetScript("OnValueChanged", function(self, value)
     value = math.floor(value)
     local profile = GetCurrentProfile()
     if profile then
         profile.imageY = value
         _G[self:GetName() .. "Text"]:SetText("Y Offset: " .. value)
+        if yOffsetInput then yOffsetInput:SetText(tostring(value)) end
         -- Update image frame in real-time
         if ChipiLust_UpdateImageSettings then
             ChipiLust_UpdateImageSettings()
@@ -413,6 +552,7 @@ local function RefreshPanel()
     enabledCheckbox:SetChecked(profile.enabled or false)
     soundsCheckbox:SetChecked(profile.playSounds or false)
     imagesCheckbox:SetChecked(profile.showImages or false)
+    timerCheckbox:SetChecked(profile.showTimer ~= false)
     
     -- Update sound dropdown
     local selectedSoundName = "Unknown"
@@ -442,6 +582,13 @@ local function RefreshPanel()
     local size = profile.imageSize or 256
     sizeSlider:SetValue(size)
     _G[sizeSlider:GetName() .. "Text"]:SetText("Image Size: " .. size .. "px")
+    if sizeInput then sizeInput:SetText(tostring(size)) end
+
+    -- Update timer size slider
+    local timerSize = profile.timerSize or 24
+    timerSizeSlider:SetValue(timerSize)
+    _G[timerSizeSlider:GetName() .. "Text"]:SetText("Timer Size: " .. timerSize)
+    if timerSizeInput then timerSizeInput:SetText(tostring(timerSize)) end
     
     -- Update position dropdown
     local positionName = "Center"
@@ -457,11 +604,13 @@ local function RefreshPanel()
     local xOffset = profile.imageX or 0
     xOffsetSlider:SetValue(xOffset)
     _G[xOffsetSlider:GetName() .. "Text"]:SetText("X Offset: " .. xOffset)
+    if xOffsetInput then xOffsetInput:SetText(tostring(xOffset)) end
     
     -- Update Y offset slider
     local yOffset = profile.imageY or 0
     yOffsetSlider:SetValue(yOffset)
     _G[yOffsetSlider:GetName() .. "Text"]:SetText("Y Offset: " .. yOffset)
+    if yOffsetInput then yOffsetInput:SetText(tostring(yOffset)) end
 end
 
 panel.refresh = RefreshPanel
@@ -473,6 +622,8 @@ panel.default = function()
         profile.enabled = true
         profile.playSounds = true
         profile.showImages = true
+        profile.showTimer = true
+        profile.timerSize = 24
         profile.selectedSound = "chipichipi_BL.mp3"
         profile.selectedImage = "chipi.tga"
         profile.imageSize = 256
@@ -482,6 +633,13 @@ panel.default = function()
         RefreshPanel()
     end
 end
+
+-- ===========================
+-- Panel OnShow Handler to Refresh on Display
+-- ===========================
+panel:SetScript("OnShow", function()
+    RefreshPanel()
+end)
 
 -- ===========================
 -- Register Panel with Interface Options
@@ -494,5 +652,8 @@ if Settings and Settings.RegisterCanvasLayoutCategory then
 elseif InterfaceOptions_AddCategory then
     InterfaceOptions_AddCategory(panel)
 end
+
+-- Initialize panel on first load
+RefreshPanel()
 
 print("Chipi Lust loaded! Access settings in Game Menu > Options > AddOns > Chipi Lust")

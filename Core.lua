@@ -36,6 +36,8 @@ local triggered_debuffs = {}
 -- Track animation state
 local animationTimer = nil
 local currentFrameIndex = 0
+local countdownTicker = nil
+local countdownEndTime = nil
 
 -- Track when effect was triggered (for 40 second death check)
 local effectTriggeredTime = nil
@@ -45,8 +47,8 @@ local hideImageTimer = nil
 -- Animation configuration (frames per row, total frames per image)
 -- Users can set these in their profiles
 local animationConfig = {
-    ["chipi.tga"] = {framesPerRow = 2, totalFrames = 4, speed = 0.1},
-    ["spinningcat.tga"] = {framesPerRow = 2, totalFrames = 8, speed = 0.1},
+    ["chipi.tga"] = {framesPerRow = 2, rows = 2, totalFrames = 4, speed = 0.1},
+    ["spinningcat.tga"] = {framesPerRow = 4, rows = 8, totalFrames = 32, speed = 0.1},
 }
 
 -- Create frame for displaying images
@@ -59,6 +61,39 @@ local ImageTexture = ImageFrame:CreateTexture(nil, "ARTWORK")
 ImageTexture:SetAllPoints()
 ImageFrame.texture = ImageTexture
 
+local TimerText = ImageFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+TimerText:SetPoint("TOP", ImageFrame, "BOTTOM", 0, -8)
+TimerText:SetText("")
+TimerText:Hide()
+ImageFrame.timerText = TimerText
+
+local function StopCountdown()
+    if countdownTicker then
+        countdownTicker:Cancel()
+        countdownTicker = nil
+    end
+    countdownEndTime = nil
+    ImageFrame.timerText:Hide()
+end
+
+local function StartCountdown(duration)
+    StopCountdown()
+    duration = tonumber(duration) or 40
+    countdownEndTime = GetTime() + duration
+    ImageFrame.timerText:SetText(tostring(math.ceil(duration)))
+    ImageFrame.timerText:Show()
+
+    countdownTicker = C_Timer.NewTicker(0.1, function()
+        local remaining = countdownEndTime - GetTime()
+        if remaining <= 0 then
+            ImageFrame.timerText:SetText("0")
+            StopCountdown()
+            return
+        end
+        ImageFrame.timerText:SetText(tostring(math.ceil(remaining)))
+    end)
+end
+
 -- Function to set texture with specific frame
 local function SetTextureFrame(texturePath, frameIndex, config)
     if not config or config.totalFrames <= 1 then
@@ -70,8 +105,9 @@ local function SetTextureFrame(texturePath, frameIndex, config)
     
     -- Calculate frame position in grid
     local framesPerRow = config.framesPerRow or 2
+    local rows = config.rows or math.ceil(config.totalFrames / framesPerRow)
     local frameWidth = 1 / framesPerRow
-    local frameHeight = 1 / math.ceil(config.totalFrames / framesPerRow)
+    local frameHeight = 1 / rows
     
     local row = math.floor(frameIndex / framesPerRow)
     local col = frameIndex % framesPerRow
@@ -143,6 +179,12 @@ local function UpdateImageFrameSettings()
     local xOffset = profile.imageX or 0
     local yOffset = profile.imageY or 0
     ImageFrame:SetPoint(point, UIParent, point, xOffset, yOffset)
+
+    local timerSize = profile.timerSize or 24
+    local fontPath, _, fontFlags = TimerText:GetFont()
+    if fontPath then
+        TimerText:SetFont(fontPath, timerSize, fontFlags)
+    end
 end
 
 -- Stop current effects
@@ -152,6 +194,7 @@ local function StopEffects()
     
     -- Stop animation
     StopAnimation()
+    StopCountdown()
     
     -- Cancel hide timer if exists
     if hideImageTimer then
@@ -183,6 +226,11 @@ local function TriggerFatigueReaction()
     
     -- Show selected image
     if profile.showImages and profile.selectedImage then
+        if hideImageTimer then
+            hideImageTimer:Cancel()
+            hideImageTimer = nil
+        end
+
         -- Update frame settings before showing
         UpdateImageFrameSettings()
         
@@ -194,11 +242,18 @@ local function TriggerFatigueReaction()
         -- Start animation or set static texture
         StartAnimation(imagePath, config)
         ImageFrame:Show()
+
+        if profile.showTimer ~= false then
+            StartCountdown(40)
+        else
+            StopCountdown()
+        end
         
         -- Auto-hide image after 40 seconds
         hideImageTimer = C_Timer.NewTimer(40, function()
             ImageFrame:Hide()
             StopAnimation()
+            StopCountdown()
             effectTriggeredTime = nil
             currentSoundHandle = nil
             hideImageTimer = nil
@@ -230,12 +285,15 @@ local function CheckForFatigueDebuff(unit)
         if not auraData then break end
         
         local spellId = auraData.spellId
+        if type(spellId) ~= "number" then
+            spellId = tonumber(spellId)
+        end
         
         -- Check if this is one of our target debuffs and we haven't already triggered
-        if FATIGUE_DEBUFFS[spellId] and not triggered_debuffs[spellId] then
+        if spellId and FATIGUE_DEBUFFS[spellId] and not triggered_debuffs[spellId] then
             -- Check debuff duration to prevent triggering on login with existing debuff
             -- Only trigger if debuff has 540-600 seconds remaining (freshly applied)
-            local expirationTime = auraData.expirationTime or 0
+            local expirationTime = tonumber(auraData.expirationTime) or 0
             local remainingTime = expirationTime - GetTime()
             
             -- Only trigger if debuff is fresh (between 540 and 600 seconds remaining)
@@ -243,7 +301,7 @@ local function CheckForFatigueDebuff(unit)
                 triggered_debuffs[spellId] = true
                 
                 -- Remove from triggered after debuff expires (or 40 seconds)
-                local duration = auraData.duration or 40
+                local duration = tonumber(auraData.duration) or 40
                 C_Timer.After(math.min(duration, 40), function()
                     triggered_debuffs[spellId] = nil
                 end)
@@ -275,6 +333,8 @@ local function OnAddonLoaded(self, event, addonName)
                     enabled = true,
                     playSounds = true,
                     showImages = true,
+                    showTimer = true,
+                    timerSize = 24,
                     selectedSound = "chipichipi_BL.mp3",
                     selectedImage = "chipi.tga",
                     imageSize = 256,
@@ -293,6 +353,8 @@ local function OnAddonLoaded(self, event, addonName)
                 enabled = ChipiLustDB.enabled or true,
                 playSounds = ChipiLustDB.playSounds or true,
                 showImages = ChipiLustDB.showImages or true,
+                showTimer = true,
+                timerSize = 24,
                 selectedSound = "chipichipi_BL.mp3",
                 selectedImage = "chipi.tga",
                 imageSize = 256,
@@ -310,6 +372,8 @@ local function OnAddonLoaded(self, event, addonName)
         if not profile.imagePoint then profile.imagePoint = "CENTER" end
         if not profile.imageX then profile.imageX = 0 end
         if not profile.imageY then profile.imageY = 0 end
+        if profile.showTimer == nil then profile.showTimer = true end
+        if not profile.timerSize then profile.timerSize = 24 end
     end
     
     -- Ensure selected profile exists
@@ -323,6 +387,8 @@ local function OnAddonLoaded(self, event, addonName)
             enabled = true,
             playSounds = true,
             showImages = true,
+            showTimer = true,
+            timerSize = 24,
             selectedSound = "chipichipi_BL.mp3",
             selectedImage = "chipi.tga",
             imageSize = 256,
