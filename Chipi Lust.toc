@@ -1,0 +1,12 @@
+## Interface: 120000, 120001
+## Title: Chipi Lust
+## Author: Shelinka
+## Version: 1.0.0
+## DefaultState: enabled
+## SavedVariables: ChipiLustDB
+## IconTexture: Interface\AddOns\Chipi Lust\Media\Images\chipi.tga
+## License: MIT
+## Notes: Plays sounds and shows images when you gain fatigue debuffs
+
+Core.lua
+Options.lua
