@@ -1,17 +1,7 @@
 local ADDON_NAME = "Chipi Lust"
-local ADDON_VERSION = "1.0.0"
+local ADDON_VERSION = "1.0.1"
 
 -- Debuff IDs to watch for
-local FATIGUE_DEBUFFS = {
-    [57723] = true,   -- Exhaustion
-    [390435] = true,  -- Exhaustion (alt)
-    [57724] = true,   -- Sated
-    [80354] = true,   -- Temporal Displacement
-    [95809] = true,   -- Hunter Pet Insanity
-    [160455] = true,  -- Hunter Pet Fatigued
-    [264689] = true,  -- Hunter Pet Fatigued (alt)
-}
-
 local FATIGUE_DEBUFF_IDS = {
     57723,
     390435,
@@ -22,19 +12,21 @@ local FATIGUE_DEBUFF_IDS = {
     264689,
 }
 
-local function NormalizeFatigueSpellId(spellId)
-    if spellId == nil then
-        return nil
+local FATIGUE_TRIGGER_MAX_REMAINING = 600
+local FATIGUE_TRIGGER_MIN_REMAINING = 540
+
+local function IsWithinFatigueTriggerWindow(auraData)
+    if not auraData then
+        return false
     end
 
-    for i = 1, #FATIGUE_DEBUFF_IDS do
-        local knownSpellId = FATIGUE_DEBUFF_IDS[i]
-        if spellId == knownSpellId then
-            return knownSpellId
-        end
+    local expirationTime = tonumber(auraData.expirationTime)
+    if not expirationTime or expirationTime <= 0 then
+        return false
     end
 
-    return nil
+    local remainingTime = expirationTime - GetTime()
+    return remainingTime <= FATIGUE_TRIGGER_MAX_REMAINING and remainingTime >= FATIGUE_TRIGGER_MIN_REMAINING
 end
 
 -- Available sound files in Media/Sounds folder
@@ -306,27 +298,17 @@ local function CheckForFatigueDebuff(unit)
     -- Track active fatigue debuffs so we can clear trigger state only when they expire/remove
     local activeFatigueDebuffs = {}
 
-    -- Check auras for fatigue debuffs
-    for i = 1, 40 do
-        local auraData = C_UnitAuras.GetAuraDataByIndex("player", i, "HARMFUL")
-        
-        if not auraData then break end
-        
-        local spellId = auraData.spellId
-        local fatigueSpellId = NormalizeFatigueSpellId(spellId)
-        
-        if fatigueSpellId and FATIGUE_DEBUFFS[fatigueSpellId] then
+    -- Query known fatigue debuffs directly by spell ID.
+    -- This avoids comparing against auraData.spellId values that may be secret/restricted.
+    for i = 1, #FATIGUE_DEBUFF_IDS do
+        local fatigueSpellId = FATIGUE_DEBUFF_IDS[i]
+        local auraData = C_UnitAuras.GetPlayerAuraBySpellID(fatigueSpellId)
+
+        if auraData then
             activeFatigueDebuffs[fatigueSpellId] = true
 
-            -- Check if this is one of our target debuffs and we haven't already triggered
             if not triggered_debuffs[fatigueSpellId] then
-                -- Check debuff duration to prevent triggering on login with existing debuff
-                -- Only trigger if debuff has 598-600 seconds remaining (freshly applied)
-                local expirationTime = tonumber(auraData.expirationTime) or 0
-                local remainingTime = expirationTime - GetTime()
-
-                -- Only trigger if debuff is very fresh (between 598 and 600 seconds remaining)
-                if remainingTime >= 598 and remainingTime <= 600 then
+                if IsWithinFatigueTriggerWindow(auraData) then
                     triggered_debuffs[fatigueSpellId] = true
                     TriggerFatigueReaction()
                 end
@@ -338,6 +320,15 @@ local function CheckForFatigueDebuff(unit)
     for debuffSpellId in pairs(triggered_debuffs) do
         if not activeFatigueDebuffs[debuffSpellId] then
             triggered_debuffs[debuffSpellId] = nil
+        end
+    end
+end
+
+local function SyncActiveFatigueDebuffsWithoutTrigger()
+    for i = 1, #FATIGUE_DEBUFF_IDS do
+        local fatigueSpellId = FATIGUE_DEBUFF_IDS[i]
+        if C_UnitAuras.GetPlayerAuraBySpellID(fatigueSpellId) then
+            triggered_debuffs[fatigueSpellId] = true
         end
     end
 end
@@ -431,6 +422,9 @@ local function OnAddonLoaded(self, event, addonName)
     
     -- Apply initial image frame settings
     UpdateImageFrameSettings()
+
+    -- Prime trigger state so existing debuffs on login don't fire the effect.
+    SyncActiveFatigueDebuffsWithoutTrigger()
     
     print("Chipi Lust " .. ADDON_VERSION .. " loaded!")
 end
@@ -446,6 +440,7 @@ ChipiLust:SetScript("OnEvent", function(self, event, ...)
     elseif event == "PLAYER_ALIVE" then
         triggered_debuffs = {}
         StopEffects()
+        SyncActiveFatigueDebuffsWithoutTrigger()
     elseif event == "PLAYER_DEAD" then
         OnPlayerDead()
     end
