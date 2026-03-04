@@ -278,6 +278,9 @@ local function CheckForFatigueDebuff(unit)
     -- Check if player is alive
     if UnitIsDead("player") then return end
     
+    -- Track active fatigue debuffs so we can clear trigger state only when they expire/remove
+    local activeFatigueDebuffs = {}
+
     -- Check auras for fatigue debuffs
     for i = 1, 40 do
         local auraData = C_UnitAuras.GetAuraDataByIndex("player", i, "HARMFUL")
@@ -289,25 +292,29 @@ local function CheckForFatigueDebuff(unit)
             spellId = tonumber(spellId)
         end
         
-        -- Check if this is one of our target debuffs and we haven't already triggered
-        if spellId and FATIGUE_DEBUFFS[spellId] and not triggered_debuffs[spellId] then
-            -- Check debuff duration to prevent triggering on login with existing debuff
-            -- Only trigger if debuff has 540-600 seconds remaining (freshly applied)
-            local expirationTime = tonumber(auraData.expirationTime) or 0
-            local remainingTime = expirationTime - GetTime()
-            
-            -- Only trigger if debuff is fresh (between 540 and 600 seconds remaining)
-            if remainingTime >= 540 and remainingTime <= 600 then
-                triggered_debuffs[spellId] = true
-                
-                -- Remove from triggered after debuff expires (or 40 seconds)
-                local duration = tonumber(auraData.duration) or 40
-                C_Timer.After(math.min(duration, 40), function()
-                    triggered_debuffs[spellId] = nil
-                end)
-                
-                TriggerFatigueReaction()
+        if spellId and FATIGUE_DEBUFFS[spellId] then
+            activeFatigueDebuffs[spellId] = true
+
+            -- Check if this is one of our target debuffs and we haven't already triggered
+            if not triggered_debuffs[spellId] then
+                -- Check debuff duration to prevent triggering on login with existing debuff
+                -- Only trigger if debuff has 598-600 seconds remaining (freshly applied)
+                local expirationTime = tonumber(auraData.expirationTime) or 0
+                local remainingTime = expirationTime - GetTime()
+
+                -- Only trigger if debuff is very fresh (between 598 and 600 seconds remaining)
+                if remainingTime >= 598 and remainingTime <= 600 then
+                    triggered_debuffs[spellId] = true
+                    TriggerFatigueReaction()
+                end
             end
+        end
+    end
+
+    -- Clear trigger state only for fatigue debuffs that are no longer active
+    for debuffSpellId in pairs(triggered_debuffs) do
+        if not activeFatigueDebuffs[debuffSpellId] then
+            triggered_debuffs[debuffSpellId] = nil
         end
     end
 end
