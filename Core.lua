@@ -32,12 +32,14 @@ end
 -- Available sound files in Media/Sounds folder
 ChipiLust_AvailableSounds = {
     {name = "Chipi Chipi", file = "chipichipi_BL.mp3"},
+    {name = "Pedro", file = "pedro.ogg"},
     {name = "Spinning Song", file = "spinningsong.mp3"},
 }
 
 -- Available image files in Media/Images folder
 ChipiLust_AvailableImages = {
     {name = "Chipi", file = "chipi.tga"},
+    {name = "Pedro", file = "pedro.tga"},
     {name = "Spinning Cat", file = "spinningcat.tga"},
 }
 
@@ -65,6 +67,16 @@ local hideImageTimer = nil
 -- Users can set these in their profiles
 local animationConfig = {
     ["chipi.tga"] = {framesPerRow = 2, rows = 2, totalFrames = 4, speed = 0.1},
+    ["pedro.tga"] = {
+        framesPerRow = 4,
+        rows = 8,
+        totalFrames = 32,
+        speed = 1 / (32 / 5),
+        textureWidth = 1024,
+        textureHeight = 2048,
+        frameWidth = 192,
+        frameHeight = 192,
+    },
     ["spinningcat.tga"] = {framesPerRow = 4, rows = 8, totalFrames = 32, speed = 0.1},
 }
 
@@ -123,16 +135,31 @@ local function SetTextureFrame(texturePath, frameIndex, config)
     -- Calculate frame position in grid
     local framesPerRow = config.framesPerRow or 2
     local rows = config.rows or math.ceil(config.totalFrames / framesPerRow)
-    local frameWidth = 1 / framesPerRow
-    local frameHeight = 1 / rows
     
     local row = math.floor(frameIndex / framesPerRow)
     local col = frameIndex % framesPerRow
-    
-    local left = col * frameWidth
-    local right = left + frameWidth
-    local top = row * frameHeight
-    local bottom = top + frameHeight
+
+    local left, right, top, bottom
+
+    if config.textureWidth and config.textureHeight and config.frameWidth and config.frameHeight then
+        local offsetX = config.offsetX or 0
+        local offsetY = config.offsetY or 0
+
+        left = (offsetX + (col * config.frameWidth)) / config.textureWidth
+        right = left + (config.frameWidth / config.textureWidth)
+        top = (offsetY + (row * config.frameHeight)) / config.textureHeight
+        bottom = top + (config.frameHeight / config.textureHeight)
+    else
+        local sheetColumns = config.sheetColumns or framesPerRow
+        local sheetRows = config.sheetRows or rows
+        local frameWidth = 1 / sheetColumns
+        local frameHeight = 1 / sheetRows
+
+        left = col * frameWidth
+        right = left + frameWidth
+        top = row * frameHeight
+        bottom = top + frameHeight
+    end
     
     ImageFrame.texture:SetTexture(texturePath)
     ImageFrame.texture:SetTexCoord(left, right, top, bottom)
