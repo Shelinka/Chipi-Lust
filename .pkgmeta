@@ -1,0 +1,5 @@
+package-as: Chipi Lust
+
+ignore:
+  - .github
+  - .gitignore
