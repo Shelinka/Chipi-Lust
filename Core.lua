@@ -1,5 +1,5 @@
 local ADDON_NAME = "Chipi Lust"
-local ADDON_VERSION = "1.0.1"
+local ADDON_VERSION = "1.0.4"
 
 -- Debuff IDs to watch for
 local FATIGUE_DEBUFF_IDS = {
@@ -13,7 +13,7 @@ local FATIGUE_DEBUFF_IDS = {
 }
 
 local FATIGUE_TRIGGER_MAX_REMAINING = 600
-local FATIGUE_TRIGGER_MIN_REMAINING = 540
+local FATIGUE_TRIGGER_MIN_REMAINING = 596
 
 local function IsWithinFatigueTriggerWindow(auraData)
     if not auraData then
